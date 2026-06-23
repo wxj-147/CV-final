@@ -1,0 +1,33 @@
+### 环境
+# PyTorch  2.1.2
+# Python  3.10(ubuntu22.04)
+# CUDA  11.8
+
+### 下载依赖
+pip install ninja
+
+# autodl加速
+source /etc/network_turbo
+echo $https_proxy
+
+# 由于git+会隔离torch，所以在requirement中加注释后单独装
+# nvdiffrast installed separately (needs --no-build-isolation)
+# git+https://github.com/NVlabs/nvdiffrast.git
+pip install setuptools wheel ninja
+pip install git+https://github.com/NVlabs/nvdiffrast.git --no-build-isolation
+
+# pysdf编译时找不到 Eigen
+apt-get update && apt-get install -y libeigen3-dev
+pip install pysdf --no-cache-dir --force-reinstall
+
+# 然后继续安装剩下的
+pip install -r requirements.txt --ignore-installed	
+
+### 训练
+cd /root/autodl-tmp/threestudio
+python launch.py \
+  --config configs/dreamfusion-sd.yaml \
+  --train \
+  --gpu 0 \
+system.prompt_processor.prompt="A modern minimalist solid oak wood dining table, featuring clean straight lines, a smooth matte finish, two sturdy cylindrical legs, and a thick rectangular tabletop, photorealistic" \
+  system.prompt_processor.negative_prompt="blurry, low quality, distorted, extra legs, floating, noisy, messy background, bad anatomy"
