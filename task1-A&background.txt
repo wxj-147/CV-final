@@ -1,6 +1,5 @@
-COLMAP
-conda install -y -c conda-forge colmap
-
+### COLMAP
+conda install -y -c conda-forge colma
 cd /root/autodl-tmp
 
 # 建目录
@@ -20,8 +19,98 @@ colmap exhaustive_matcher \
 
 # 3. 稀疏重建
 mkdir -p colmap_data/sparse
-
 colmap mapper \
   --database_path colmap_data/database.db \
   --image_path /root/autodl-tmp/images \
   --output_path colmap_data/sparse
+
+
+
+### 2DGS
+# 克隆
+source /etc/network_turbo
+curl -I --max-time 10 https://github.com 2>&1 | head -5
+cd /root/autodl-tmp
+
+# 让 git 也明确用这些环境变量
+export http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
+git clone https://github.com/hbb1/2d-gaussian-splatting.git --recursive
+
+# 环境下载
+conda create -n surfel_splatting python=3.8 -y
+conda activate surfel_splatting
+source /root/miniconda3/bin/activate surfel_splatting  (激活)
+pip install torch==2.0.0 torchvision==0.15.1 torchaudio==2.0.1 \
+  --index-url https://download.pytorch.org/whl/cu118
+pip install plyfile opencv-python pillow scikit-image tqdm
+conda install -c nvidia/label/cuda-11.8.0 cuda-toolkit -y
+
+# 环境配置
+export CUDA_HOME=$CONDA_PREFIX
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+which nvcc
+nvcc --version
+
+# 编译
+export CUDA_HOME=$CONDA_PREFIX
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+export FORCE_CUDA=1
+export TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6"
+cd /root/autodl-tmp/2d-gaussian-splatting/submodules/diff-surfel-rasterization
+pip install -e . --no-build-isolation
+cd ../simple-knn
+pip install -e . --no-build-isolation
+
+# 去畸变
+colmap image_undistorter \
+  --image_path /root/autodl-tmp/data1/images \
+  --input_path /root/autodl-tmp/data1/sparse/0 \
+  --output_path /root/autodl-tmp/data1_undistorted \
+  --output_type COLMAP
+
+# 训练得到物体A
+cd /root/autodl-tmp/2d-gaussian-splatting
+conda activate surfel_splatting
+python train.py \
+  -s /root/autodl-tmp/data1_undistorted \
+  --lambda_normal 0.05 \
+  --lambda_dist 0.002 \
+  --depth_ratio 0
+
+# 渲染物体A
+cd /root/autodl-tmp/2d-gaussian-splatting
+python render.py \
+  -s /root/autodl-tmp/data1_undistorted \
+  -m output/693c3ad7-5 \
+  --skip_train --skip_test
+
+
+
+### 创建新环境用于生成背景A
+source /root/miniconda3/bin/activate surfel_splatting
+
+#安装依赖
+pip install opencv-python pillow scikit-image tqdm lpips trimesh mediapy open3d==0.18.0 matplotlib
+
+# 下载Mip-NeRF 360数据集
+cd /root/autodl-tmp
+wget https://storage.googleapis.com/gresearch/refraw360/360_v2.zip -O 360_v2.zip
+unzip 360_v2.zip -d mipnerf360_raw
+
+# 选择room为对象，训练并渲染得到background
+cd /root/autodl-tmp/2d-gaussian-splatting
+conda activate surfel_splatting
+python train.py \
+  -s /root/autodl-tmp/room \
+  --lambda_normal 0.05 \
+  --lambda_dist 0.002 \
+  --depth_ratio 0 \
+  --iterations 80000
+cd /root/autodl-tmp/2d-gaussian-splatting
+conda activate surfel_splatting
+python render.py \
+  -s /root/autodl-tmp/room \
+  -m output/7c72276e-1 \
+  --skip_train --skip_test
