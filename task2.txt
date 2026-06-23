@@ -1,0 +1,52 @@
+Task2
+# 数据集下载
+source /etc/network_turbo
+apt update
+apt install -y git git-lfs
+git lfs install
+cd /root/autodl-tmp
+git clone https://huggingface.co/datasets/xiaoma26/calvin-lerobot
+
+# 克隆lerobot
+cd /root/autodl-tmp
+mkdir lerobot_calvin
+cd lerobot_calvin
+git clone https://github.com/huggingface/lerobot.git
+cd lerobot
+
+# 创建环境
+conda create -n lerobot python=3.12 -y
+conda activate lerobot
+
+# 安装依赖
+pip install -e .
+
+# 由于下载的数据格式是v2.1，所以需要安装的lerobot版本适配
+# 创建 symbolic dataset repo软链接仓库
+mkdir -p ~/autodl-tmp/lerobot_data
+# B
+ln -s ~/autodl-tmp/calvin-lerobot/splitB \
+      ~/autodl-tmp/lerobot_data/calvin_B
+# A、B、C
+mkdir -p ~/autodl-tmp/lerobot_data/calvin_ABC
+ln -s ~/autodl-tmp/calvin-lerobot/splitA ~/autodl-tmp/lerobot_data/calvin_ABC/A
+ln -s ~/autodl-tmp/calvin-lerobot/splitB ~/autodl-tmp/lerobot_data/calvin_ABC/B
+ln -s ~/autodl-tmp/calvin-lerobot/splitC ~/autodl-tmp/lerobot_data/calvin_ABC/C
+
+# 训练
+python lerobot/scripts/train.py \
+  --dataset.path ~/autodl-tmp/lerobot_data/calvin_B \
+  --policy.type act \
+  --output_dir ~/autodl-tmp/outputs/act_B
+python lerobot/scripts/train.py \
+  --dataset.path ~/autodl-tmp/lerobot_data/calvin_ABC \
+  --policy.type act \
+  --output_dir ~/autodl-tmp/outputs/act_ABC
+
+# 在D上进行测试
+python lerobot/scripts/eval.py \
+  --policy_path ~/autodl-tmp/outputs/act_B/checkpoints/last.pt \
+  --env_path ~/autodl-tmp/calvin-lerobot/splitD
+python lerobot/scripts/eval.py \
+  --policy_path ~/autodl-tmp/outputs/act_ABC/checkpoints/last.pt \
+  --env_path ~/autodl-tmp/calvin-lerobot/splitD
