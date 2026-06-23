@@ -92,6 +92,7 @@ numpy 1.26.4
 
 ### 训练
 # 训练前将去除背景的图片放到指定位置data/C/C_clean_1k.png
+# 这里我采用在线AI图片编辑进行去背景，之后运用python C.py进行图片处理变为1024*1024大小便于读取
 # coarse部分
 cd /root/autodl-tmp/Magic123
 CUDA_VISIBLE_DEVICES=0 python main.py -O \
