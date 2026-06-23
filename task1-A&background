@@ -1,0 +1,27 @@
+COLMAP
+conda install -y -c conda-forge colmap
+
+cd /root/autodl-tmp
+
+# 建目录
+mkdir -p colmap_data
+
+# 上传拍摄的物体图片到以上目录后，依次进行以下处理
+# 1. 特征提取
+colmap feature_extractor \
+  --database_path colmap_data/database.db \
+  --image_path /root/autodl-tmp/images \
+  --ImageReader.single_camera 1
+
+# 2. 匹配
+colmap exhaustive_matcher \
+  --database_path colmap_data/database.db \
+  --FeatureMatching.use_gpu 1
+
+# 3. 稀疏重建
+mkdir -p colmap_data/sparse
+
+colmap mapper \
+  --database_path colmap_data/database.db \
+  --image_path /root/autodl-tmp/images \
+  --output_path colmap_data/sparse
