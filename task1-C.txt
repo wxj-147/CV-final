@@ -1,0 +1,130 @@
+Task1--C
+### 环境
+# PyTorch  2.1.2
+# Python  3.10(ubuntu22.04)
+# CUDA  11.8
+
+### 克隆Magic123
+cd ~/autodl-tmp
+git clone https://github.com/guochengqian/Magic123.git
+cd Magic123
+
+### 安装系统依赖
+apt update
+apt install \
+build-essential \
+cmake \
+ninja-build \
+ffmpeg \
+libgl1-mesa-glx \
+libglib2.0-0 \
+git \
+wget \
+libeigen3-dev -y
+
+### 先安装非git+部分
+# git+直接下载会隔离torch，所以在requirement里面注释了这四行，之后单独安装
+# git+https://github.com/openai/shap-e
+# git+https://github.com/ashawkey/cubvh
+# git+https://github.com/openai/CLIP.git
+# git+https://github.com/NVlabs/nvdiffrast/
+# 安装其他依赖
+pip install -r requirements.txt
+
+### 单独安装git+
+# 先下载源码
+mkdir third_party
+cd third_party
+git clone https://github.com/NVlabs/nvdiffrast.git
+git clone https://github.com/openai/CLIP.git
+git clone https://github.com/openai/shap-e.git
+git clone https://github.com/ashawkey/cubvh.git
+# 逐个安装
+cd nvdiffrast
+pip install --no-build-isolation .
+cd ../CLIP
+pip install .
+cd ../shap-e
+pip install .
+cd ../cubvh
+pip install --no-build-isolation .
+
+### 安装以上部分时可能会出现：不存在 Eigen 头文件 & 找不到wheel模块
+# 解决：不存在 Eigen 头文件，可通过建立软链接
+cd ~/autodl-tmp/Magic123/third_party/cubvh
+ln -s /usr/include/eigen3 third_party/eigen
+ls third_party/eigen/Eigen | head # 验证
+# 解决：找不到wheel模块
+pip install --upgrade pip setuptools wheel
+pip install ninja
+pip show wheel # 验证
+
+### 手动安装install_ext.sh
+cd ~/autodl-tmp/Magic123
+pip install --no-build-isolation ./raymarching
+pip install --no-build-isolation ./shencoder
+pip install --no-build-isolation ./freqencoder
+pip install --no-build-isolation ./gridencoder
+# 统一测试验证
+python - <<'PY'
+import raymarching
+import shencoder
+import freqencoder
+import gridencoder
+print("loaded successfully")
+PY
+
+### 下载模型权重到本地
+mkdir -p pretrained/zero123
+cd pretrained/zero123
+wget https://huggingface.co/cvlab/zero123-weights/resolve/main/105000.ckpt
+wget https://raw.githubusercontent.com/guochengqian/Magic123/master/pretrained/zero123/sd-objaverse-finetune-c_concat-256.yaml
+mkdir -p pretrained/midas
+cd pretrained/midas
+wget https://github.com/isl-org/MiDaS/releases/download/v3_1/dpt_beit_large_512.pt
+
+### 检查依赖的版本兼容问题
+diffusers 0.19.3 
+transformers 4.28.1 
+huggingface_hub 0.16.4
+accelerate 0.21.0
+numpy 1.26.4
+
+### 训练
+# 训练前将去除背景的图片放到指定位置data/C/C_clean_1k.png
+# coarse部分
+cd /root/autodl-tmp/Magic123
+CUDA_VISIBLE_DEVICES=0 python main.py -O \
+  --text "a push-type plastic bottle" \
+  --sd_version 1.5 \
+  --image data/C/C_clean_1k.png \
+  --workspace out/bottle_coarse \
+  --optim adam \
+  --iters 5000 \
+  --guidance SD zero123 \
+  --lambda_guidance 1.0 40 \
+  --guidance_scale 100 5 \
+  --latent_iter_ratio 0 \
+  --normal_iter_ratio 0.2 \
+  --t_range 0.2 0.6 \
+  --bg_radius -1 \
+  --save_mesh
+
+# fine部分
+CUDA_VISIBLE_DEVICES=0 python main.py -O \
+--text "a push-type plastic bottle" \
+--sd_version 1.5 \
+--image data/C/C_clean_1k.png \
+--workspace out/bottle_fine \
+--dmtet \
+--init_ckpt out/bottle_coarse/checkpoints/bottle_coarse.pth \
+--iters 5000 \
+--optim adam \
+--known_view_interval 4 \
+--latent_iter_ratio 0 \
+--guidance SD zero123 \
+--lambda_guidance 1e-3 0.01 \
+--guidance_scale 100 5 \
+--rm_edge \
+--bg_radius -1 \
+--save_mesh
